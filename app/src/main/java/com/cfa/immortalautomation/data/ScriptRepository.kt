@@ -13,15 +13,21 @@ object ScriptRepository {
     private const val CURRENT = "current.json"
 
     private fun dir(ctx: Context): File = File(ctx.filesDir, DIR).apply { mkdirs() }
-    private fun current(ctx: Context): File = File(ctx.filesDir, CURRENT)
+    private fun current(ctx: Context): File = File(ctx.filesDir, "$DIR/$CURRENT")
 
     /* ---------- record ---------- */
 
     fun savePoint(ctx: Context, action: ClickAction) {
-        val file  = current(ctx)
-        val list: List<ClickAction> =
-            if (file.exists()) Json.decodeFromString(file.readText()) else emptyList()
-        file.writeText(Json.encodeToString(list + action))
+        val file = current(ctx)
+        val previous = runCatching {
+            if (file.exists() && file.length() > 0) {
+                Json.decodeFromString<List<ClickAction>>(file.readText())
+            } else emptyList()
+        }.getOrElse {
+            file.delete()
+            emptyList()
+        }
+        file.writeText(Json.encodeToString(previous + action))
     }
 
     /* ---------- commit / list / delete ---------- */
@@ -32,9 +38,7 @@ object ScriptRepository {
     fun all(ctx: Context): List<File> =
         dir(ctx).listFiles { f -> f.extension == "json" }?.toList().orEmpty()
 
-    fun delete(file: File) {
-        file.delete()
-    }
+    fun delete(file: File) { file.delete() }
 
     fun load(file: File): List<ClickAction> =
         Json.decodeFromString(file.readText())

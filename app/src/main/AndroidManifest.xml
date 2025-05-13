@@ -3,17 +3,12 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <!-- ──────── permissions ──────── -->
-    <!-- overlay permission -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-
-    <!-- needed when a service calls startForeground() -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-
-    <!-- optional‑but‑safer for the specific type we use on 34+ -->
+    <!-- permission associée au type FGS « mediaPlayback » -->
     <uses-permission
         android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK"
         tools:targetApi="34" />
-
 
     <application
         android:allowBackup="true"
@@ -24,7 +19,7 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.Immortalautomation"
-        tools:targetApi="31"> <!-- Test target 31 and if not working switch to 34-->
+        tools:targetApi="31">
 
         <!-- ──────── launcher ──────── -->
         <activity
@@ -34,18 +29,17 @@
             android:theme="@style/Theme.Immortalautomation">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
 
-        <!-- ──────── floating overlay (records taps) ──────── -->
+        <!-- ──────── floating overlay ──────── -->
         <service
             android:name=".ui.overlay.FloatingOverlayService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
 
-        <!-- ──────── automation accessibility service (plays taps) ──────── -->
+        <!-- ──────── automation accessibility ──────── -->
         <service
             android:name=".automation.AutomationAccessibilityService"
             android:exported="false"
@@ -55,12 +49,10 @@
                 <action android:name="android.accessibilityservice.AccessibilityService"/>
             </intent-filter>
 
-            <!-- static config that tells the system we can inject gestures -->
             <meta-data
                 android:name="android.accessibilityservice"
                 android:resource="@xml/automation_service_config"/>
         </service>
 
     </application>
-
 </manifest>

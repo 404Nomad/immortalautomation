@@ -1,107 +1,245 @@
 package com.cfa.immortalautomation.ui.overlay
 
-import android.app.*
+import android.app.NotificationChannel
+import android.app.NotificationManager
+import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
-import android.os.Build
-import android.os.IBinder
+import android.os.*
 import android.view.*
 import android.widget.ImageView
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import com.cfa.immortalautomation.automation.AutomationAccessibilityService
 import com.cfa.immortalautomation.data.ScriptRepository
 import com.cfa.immortalautomation.model.ClickAction
+import java.text.SimpleDateFormat
+import java.util.*
 
 class FloatingOverlayService : Service() {
 
+    /* ── overlay / UI state ────────────────────────── */
     private lateinit var wm: WindowManager
-    private lateinit var overlay: ImageView
-    private lateinit var params: WindowManager.LayoutParams
+    private lateinit var mainBtn: ImageView
+    private val childBtns = mutableListOf<View>()
+    private var isExpanded  = false
+    private var isRecording = false
 
-    /* ---------- lifecycle ---------- */
+    private lateinit var overlay: View
+    private val h = Handler(Looper.getMainLooper())
+    private val sizePx by lazy { (48 * resources.displayMetrics.density).toInt() }
+    private val OVERLAY_HIDE_MS = 80L
 
+    /* ── lifecycle ─────────────────────────────────── */
     override fun onCreate() {
         super.onCreate()
-        startForegroundNotification()
-
+        startForegroundNotif()
         wm = getSystemService(WINDOW_SERVICE) as WindowManager
-        overlay = ImageView(this).apply { setImageResource(android.R.drawable.ic_input_add) }
 
-        params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-            PixelFormat.TRANSLUCENT
-        )
-
-        overlay.setOnTouchListener { _, e ->
-            if (e.action == MotionEvent.ACTION_DOWN) {
-                savePoint(e.rawX, e.rawY)
-                placeMarker(e.rawX, e.rawY)
-                Toast.makeText(
-                    this,
-                    "Captured (${e.rawX.toInt()}, ${e.rawY.toInt()})",
-                    Toast.LENGTH_SHORT
-                ).show()
-                return@setOnTouchListener true
-            }
-            false
-        }
-
-        wm.addView(overlay, params)
+        addRecorderOverlay()
+        addMainButton()
+        addChildButtons()
     }
 
     override fun onDestroy() {
-        wm.removeView(overlay)
+        (listOf(mainBtn, overlay) + childBtns).forEach { runCatching { wm.removeView(it) } }
         super.onDestroy()
     }
 
-    override fun onBind(intent: Intent?): IBinder? = null
+    override fun onBind(i: Intent?): IBinder? = null
 
-    /* ---------- helpers ---------- */
+    /* ── full‑screen invisible overlay ─────────────── */
+    private fun addRecorderOverlay() {
+        overlay = View(this).apply { visibility = View.GONE }
 
-    private fun savePoint(x: Float, y: Float) {
-        ScriptRepository.savePoint(this, ClickAction(x, y))
-    }
-
-    /** draw a small green dot where the user tapped */
-    private fun placeMarker(x: Float, y: Float) {
-        val size = (16 * resources.displayMetrics.density).toInt()
-        val dot  = View(this).apply { setBackgroundResource(android.R.drawable.presence_online) }
-
-        val lp = WindowManager.LayoutParams(
-            size, size,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
-            PixelFormat.TRANSLUCENT
-        ).apply {
+        val lp = baseLp().apply {
+            width  = WindowManager.LayoutParams.MATCH_PARENT
+            height = WindowManager.LayoutParams.MATCH_PARENT
+            flags  = flags or WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
             gravity = Gravity.TOP or Gravity.START
-            this.x  = x.toInt() - size / 2
-            this.y  = y.toInt() - size / 2
         }
-        wm.addView(dot, lp)
+
+        overlay.setOnTouchListener { v, e ->
+            if (!isRecording) return@setOnTouchListener false
+
+            if (e.actionMasked == MotionEvent.ACTION_DOWN) {
+                recordPoint(e.rawX, e.rawY)
+                v.performClick()
+            }
+            false
+        }
+        overlay.setOnClickListener { }
+        wm.addView(overlay, lp)
     }
 
-    /* ---------- foreground‑service boilerplate ---------- */
+    /* ── main floating bubble ──────────────────────── */
+    private fun addMainButton() {
+        mainBtn = ImageView(this).apply { setImageResource(android.R.drawable.presence_online) }
 
-    private fun startForegroundNotification() {
-        if (Build.VERSION.SDK_INT < 34) return   // fg‑service type not required < 14
+        val lp = baseLp().apply {
+            width = sizePx; height = sizePx
+            x = 0; y = 400
+        }
+
+        var sx = 0; var sy = 0; var rx = 0f; var ry = 0f; var moved = false
+
+        mainBtn.setOnTouchListener { v, e ->
+            when (e.actionMasked) {
+                MotionEvent.ACTION_DOWN -> { sx = lp.x; sy = lp.y; rx = e.rawX; ry = e.rawY; moved = false; true }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = (e.rawX - rx).toInt(); val dy = (e.rawY - ry).toInt()
+                    if (dx*dx + dy*dy > 16) moved = true
+                    lp.x = sx + dx; lp.y = sy + dy
+                    wm.updateViewLayout(mainBtn, lp)
+                    if (isExpanded) positionChildren(lp)
+                    true
+                }
+                MotionEvent.ACTION_UP -> {
+                    if (!moved) { v.performClick(); toggleMenu(lp) }
+                    true
+                }
+                else -> false
+            }
+        }
+        wm.addView(mainBtn, lp)
+    }
+
+    /* ── child buttons (play/save/record) ──────────── */
+    private fun addChildButtons() {
+        val icons = intArrayOf(
+            android.R.drawable.ic_media_play,
+            android.R.drawable.ic_menu_save,
+            android.R.drawable.ic_input_add
+        )
+
+        icons.forEachIndexed { idx, res ->
+            val btn = ImageView(this).apply {
+                setImageResource(res)
+                visibility = View.GONE
+            }
+            val lp  = baseLp().apply { width = sizePx; height = sizePx }
+
+            when (idx) {
+                2 -> btn.setOnClickListener { startRec(); collapse() }
+                1 -> btn.setOnClickListener { saveRec();  collapse() }
+                0 -> btn.setOnClickListener { playRec();  collapse() }
+            }
+            childBtns += btn
+            wm.addView(btn, lp)
+        }
+    }
+
+    /* ── recording logic ───────────────────────────── */
+    private fun startRec() {
+        isRecording = true
+        overlay.visibility = View.VISIBLE
+        toast("Enregistrement… touchez l’écran")
+    }
+
+    private fun recordPoint(x: Float, y: Float) {
+        ScriptRepository.savePoint(this, ClickAction(x, y))
+        flashDot(x, y)
+
+        overlay.visibility = View.GONE
+        AutomationAccessibilityService.instance?.injectTap(x, y)
+        h.postDelayed({ overlay.visibility = View.VISIBLE }, OVERLAY_HIDE_MS)
+    }
+
+    private fun saveRec() {
+        if (!ScriptRepository.currentExists(this)) { toast("Rien à sauvegarder"); return }
+        val name = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
+        ScriptRepository.commit(this, name)
+        isRecording = false
+        overlay.visibility = View.GONE
+        toast("Sauvegardé sous $name")
+    }
+
+    private fun playRec() {
+        AutomationAccessibilityService.instance
+            ?.playScript(ScriptRepository.currentFile(this))
+            ?: toast("Activez le service d’accessibilité")
+    }
+
+    /* ── menu helpers ─────────────────────────────── */
+    private fun toggleMenu(lp: WindowManager.LayoutParams) =
+        if (isExpanded) collapse() else expand(lp)
+
+    private fun expand(lp: WindowManager.LayoutParams) {
+        isExpanded = true
+        positionChildren(lp)
+        childBtns.forEach { it.visibility = View.VISIBLE }
+    }
+
+    private fun collapse() {
+        isExpanded = false
+        childBtns.forEach { it.visibility = View.GONE }
+    }
+
+    private fun positionChildren(lp: WindowManager.LayoutParams) {
+        childBtns.forEachIndexed { i, v ->
+            val clp = v.layoutParams as WindowManager.LayoutParams
+            clp.x = lp.x
+            clp.y = lp.y - (i + 1) * (sizePx + 12)
+            wm.updateViewLayout(v, clp)
+        }
+    }
+
+    /* ── visual helpers ───────────────────────────── */
+    private fun flashDot(x: Float, y: Float) {
+        val d  = (24 * resources.displayMetrics.density).toInt()
+        val v  = View(this).apply { setBackgroundResource(android.R.color.holo_red_light) }
+        val lp = baseLp().apply {
+            width = d; height = d; gravity = Gravity.TOP or Gravity.START
+            this.x = (x - d / 2).toInt(); this.y = (y - d / 2).toInt()
+            flags  = flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        }
+        runCatching { wm.addView(v, lp) }
+        h.postDelayed({ runCatching { wm.removeView(v) } }, 750)
+    }
+
+    private fun toast(msg: String) =
+        Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+
+    private fun baseLp() = WindowManager.LayoutParams(
+        WindowManager.LayoutParams.WRAP_CONTENT,
+        WindowManager.LayoutParams.WRAP_CONTENT,
+        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+        PixelFormat.TRANSLUCENT
+    )
+
+    /* ── foreground notification ──────────────────── */
+    private fun startForegroundNotif() {
+        if (Build.VERSION.SDK_INT < 26) return
+
         val channelId = "overlay"
         val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        nm.createNotificationChannel(
-            NotificationChannel(channelId, "Overlay", NotificationManager.IMPORTANCE_MIN)
-        )
-        val notif = NotificationCompat.Builder(this, channelId)
+        if (nm.getNotificationChannel(channelId) == null) {
+            nm.createNotificationChannel(
+                NotificationChannel(
+                    channelId,
+                    "Overlay",
+                    NotificationManager.IMPORTANCE_MIN
+                )
+            )
+        }
+
+        val notification = NotificationCompat.Builder(this, channelId)
             .setSmallIcon(android.R.drawable.ic_menu_view)
-            .setContentTitle("Overlay running")
+            .setContentTitle("Overlay actif")
+            .setOngoing(true)
             .build()
-        startForeground(
-            1,
-            notif,
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
-        )
+
+        if (Build.VERSION.SDK_INT >= 34) {
+            // passe explicitement le type demandé par le Manifest
+            startForeground(
+                1,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+            )
+        } else {
+            startForeground(1, notification)
+        }
     }
 }

@@ -4,7 +4,6 @@ import android.accessibilityservice.AccessibilityService
 import android.accessibilityservice.GestureDescription
 import android.graphics.Path
 import android.view.accessibility.AccessibilityEvent
-import com.cfa.immortalautomation.model.ClickAction
 import kotlinx.coroutines.*
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -12,47 +11,48 @@ import java.io.File
 
 class AutomationAccessibilityService : AccessibilityService() {
 
-    /* -------- static access to the running instance -------- */
+    /* ── static access ─────────────────────────────── */
     companion object {
         @Volatile
         var instance: AutomationAccessibilityService? = null
             private set
     }
 
-    private val job   = SupervisorJob()
-    private val scope = CoroutineScope(Dispatchers.Default + job)
+    /* ── coroutines ─────────────────────────────────── */
+    private val serviceJob   = SupervisorJob()
+    private val scope        = CoroutineScope(Dispatchers.Default + serviceJob)
+    private var playJob: Job? = null
 
-    override fun onServiceConnected() {
-        super.onServiceConnected()
-        instance = this
+    /* ── lifecycle ─────────────────────────────────── */
+    override fun onServiceConnected() { instance = this }
+    override fun onInterrupt() = Unit
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
+
+    override fun onDestroy() {
+        playJob?.cancel()
+        serviceJob.cancel()
+        instance = null
+        super.onDestroy()
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
-    override fun onInterrupt() = Unit
-
-    /** Play a script file */
-    fun playScript(file: File) = scope.launch {
-        if (!file.exists()) return@launch
-        val actions: List<ClickAction> = Json.decodeFromString(file.readText())
-        for (a in actions) {
-            gestureTap(a.x, a.y)
-            delay(a.delayAfter)
+    /* ── public API ─────────────────────────────────── */
+    /** Play a script file (cancels any previous playback). */
+    fun playScript(file: File) {
+        if (!file.exists()) return
+        playJob?.cancel()
+        playJob = scope.launch {
+            val actions = Json.decodeFromString<List<com.cfa.immortalautomation.model.ClickAction>>(file.readText())
+            actions.forEach { action ->
+                injectTap(action.x, action.y)
+                delay(action.delayAfter)
+            }
         }
     }
 
-    private fun gestureTap(x: Float, y: Float) {
-        val path  = Path().apply { moveTo(x, y) }
-        val stroke = GestureDescription.StrokeDescription(path, 0, 50)
-        dispatchGesture(
-            GestureDescription.Builder().addStroke(stroke).build(),
-            null,
-            null
-        )
-    }
-
-    override fun onDestroy() {
-        instance = null
-        job.cancel()
-        super.onDestroy()
+    /** Inject a single tap gesture. */
+    fun injectTap(x: Float, y: Float, duration: Long = 50L) {
+        val path   = Path().apply { moveTo(x, y) }
+        val stroke = GestureDescription.StrokeDescription(path, /*startTime*/0, duration)
+        dispatchGesture(GestureDescription.Builder().addStroke(stroke).build(), null, null)
     }
 }
