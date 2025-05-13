@@ -12,7 +12,11 @@ import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import com.cfa.immortalautomation.data.ScriptRepository
 import com.cfa.immortalautomation.model.ClickAction
+import androidx.compose.ui.unit.dp
 import java.io.File
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.decodeFromString
+
 
 class FloatingOverlayService : Service() {
 
@@ -35,17 +39,36 @@ class FloatingOverlayService : Service() {
             PixelFormat.TRANSLUCENT
         )
 
-        overlay.setOnTouchListener { _, e ->
+        overlay.setOnTouchListener { v, e ->
             if (e.action == MotionEvent.ACTION_DOWN) {
                 savePoint(e.rawX, e.rawY)
+                placeMarker(e.rawX, e.rawY)
                 Toast.makeText(
                     this,
                     "Captured (${e.rawX.toInt()}, ${e.rawY.toInt()})",
                     Toast.LENGTH_SHORT
                 ).show()
+                return@setOnTouchListener true          // consume the touch!
             }
             false
         }
+
+        /* helper below */
+        private fun placeMarker(x: Float, y: Float) {
+            val dot = View(this).apply { setBackgroundResource(android.R.drawable.presence_online) }
+            val size = 16.dp.toPx().toInt()
+            val lp = WindowManager.LayoutParams(
+                size, size,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE,
+                PixelFormat.TRANSLUCENT
+            )
+            lp.x = x.toInt() - size / 2
+            lp.y = y.toInt() - size / 2
+            wm.addView(dot, lp)
+        }
+
 
         wm.addView(overlay, params)
     }

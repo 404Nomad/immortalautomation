@@ -42,5 +42,8 @@ fun MainScreen(vm: MainViewModel = viewModel()) {
         Button(onClick = { showList = true }) {
             Text("View scripts")
         }
+        Button(onClick = { vm.saveCurrent(ctx) }) {
+            Text("Save current recording")
+        }
     }
 }

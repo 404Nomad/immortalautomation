@@ -38,4 +38,12 @@ object ScriptRepository {
 
     fun load(file: File): List<ClickAction> =
         Json.decodeFromString(file.readText())
+
+    // add at end of object
+    const val CURRENT = "current.json"
+
+    fun currentFile(ctx: Context): File = File(ctx.filesDir, CURRENT)
+
+    fun currentExists(ctx: Context): Boolean = currentFile(ctx).exists()
+
 }

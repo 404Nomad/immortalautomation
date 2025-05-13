@@ -39,6 +39,14 @@ fun ScriptListScreen(onClose: () -> Unit = {}) {
             )
         }
     ) { padding ->
+        if (ScriptRepository.currentExists(ctx)) {
+            TextButton(onClick = {
+                AutomationAccessibilityService.instance?.playScript(
+                    ScriptRepository.currentFile(ctx)
+                )
+            }) { Text("▶ Run in‑progress recording") }
+            Spacer(Modifier.height(8.dp))
+        }
         LazyColumn(
             contentPadding = padding,
             verticalArrangement = Arrangement.spacedBy(8.dp),

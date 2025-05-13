@@ -8,6 +8,10 @@ import androidx.lifecycle.ViewModel
 import com.cfa.immortalautomation.automation.AutomationAccessibilityService
 import com.cfa.immortalautomation.ui.overlay.FloatingOverlayService
 import java.io.File
+import android.widget.Toast
+import java.text.SimpleDateFormat
+import java.util.*
+import com.cfa.immortalautomation.data.ScriptRepository
 
 class MainViewModel : ViewModel() {
 
@@ -24,6 +28,17 @@ class MainViewModel : ViewModel() {
         } else {
             ctx.startService(Intent(ctx, FloatingOverlayService::class.java))
         }
+    }
+
+    fun saveCurrent(ctx: Context) {
+        if (!ScriptRepository.currentExists(ctx)) {
+            Toast.makeText(ctx, "No recording yet", Toast.LENGTH_SHORT).show()
+            return
+        }
+        // quick name: yyyyMMdd_HHmm
+        val name = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
+        ScriptRepository.commit(ctx, name)
+        Toast.makeText(ctx, "Saved as $name", Toast.LENGTH_SHORT).show()
     }
 
     fun requestAccessibility(ctx: Context) {
