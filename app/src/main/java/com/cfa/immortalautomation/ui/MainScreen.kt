@@ -11,18 +11,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 
-/**
- * Home screen with record / run / save / list actions.
- *
- * Ajout : trois compteurs indépendants sous les boutons Test A, B, C
- * pour vérifier qu’un replay d’enregistrement émet bien 1:1 tap events.
- */
 @Composable
 fun MainScreen(vm: MainViewModel = viewModel()) {
     val ctx: Context = LocalContext.current
     var showList by remember { mutableStateOf(false) }
 
-    /* ---------- compteurs test ---------- */
+    /* ---- counters A/B/C ---- */
     var countA by remember { mutableStateOf(0) }
     var countB by remember { mutableStateOf(0) }
     var countC by remember { mutableStateOf(0) }
@@ -39,7 +33,7 @@ fun MainScreen(vm: MainViewModel = viewModel()) {
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
 
-        /* ── actions principales ────────────────────── */
+        /* ---------- main actions ---------- */
         Button(onClick = { vm.requestOverlay(ctx) })   { Text("Grant overlay & start widget") }
         Button(onClick = { vm.requestAccessibility(ctx) }) { Text("Enable accessibility service") }
         Button(onClick = { vm.runScript(ctx) })        { Text("Run recorded script") }
@@ -48,29 +42,35 @@ fun MainScreen(vm: MainViewModel = viewModel()) {
 
         Spacer(Modifier.height(20.dp))
 
-        /* ── zone de test des clics ─────────────────── */
+        /* ---------- test area ---------- */
         Row(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Top
         ) {
-            /* ---------- Bouton A ---------- */
+            /* ---- Test A ---- */
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Button(onClick = { countA++ }) { Text("Test A") }
-                Text("Count : $countA")
+                Text("Count : $countA")
             }
 
-            /* ---------- Bouton B ---------- */
+            /* ---- Test B ---- */
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Button(onClick = { countB++ }) { Text("Test B") }
-                Text("Count : $countB")
+                Text("Count : $countB")
+                Spacer(Modifier.height(4.dp))
+                /* reset button just under B counter */
+                Button(onClick = {
+                    countA = 0; countB = 0; countC = 0
+                }) { Text("Reset") }
             }
 
-            /* ---------- Bouton C ---------- */
+            /* ---- Test C ---- */
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Button(onClick = { countC++ }) { Text("Test C") }
-                Text("Count : $countC")
+                Text("Count : $countC")
             }
+
         }
     }
 }
