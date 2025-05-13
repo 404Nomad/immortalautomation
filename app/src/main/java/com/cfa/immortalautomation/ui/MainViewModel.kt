@@ -1,10 +1,13 @@
 package com.cfa.immortalautomation.ui
 
+import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import android.widget.EditText
 import android.widget.Toast
+//import androidx.appcompat.app.AlertDialog
 import androidx.lifecycle.ViewModel
 import com.cfa.immortalautomation.automation.AutomationAccessibilityService
 import com.cfa.immortalautomation.data.ScriptRepository
@@ -36,9 +39,25 @@ class MainViewModel : ViewModel() {
             Toast.makeText(ctx, "No recording yet", Toast.LENGTH_SHORT).show()
             return
         }
-        val name = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
-        ScriptRepository.commit(ctx, name)
-        Toast.makeText(ctx, "Saved as $name", Toast.LENGTH_SHORT).show()
+
+        val input = EditText(ctx).apply {
+            hint = "Script name"
+            setSingleLine()
+        }
+
+        AlertDialog.Builder(ctx)
+            .setTitle("Save recording")
+            .setView(input)
+            .setPositiveButton("Save") { _, _ ->
+                var name = input.text.toString().trim()
+                if (name.isEmpty()) {
+                    name = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
+                }
+                ScriptRepository.commit(ctx, name)
+                Toast.makeText(ctx, "Saved as $name", Toast.LENGTH_SHORT).show()
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     /* ---------- accessibility ---------- */
