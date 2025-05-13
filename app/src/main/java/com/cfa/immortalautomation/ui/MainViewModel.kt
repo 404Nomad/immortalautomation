@@ -4,18 +4,17 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings
+import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import com.cfa.immortalautomation.automation.AutomationAccessibilityService
+import com.cfa.immortalautomation.data.ScriptRepository
 import com.cfa.immortalautomation.ui.overlay.FloatingOverlayService
-import java.io.File
-import android.widget.Toast
 import java.text.SimpleDateFormat
 import java.util.*
-import com.cfa.immortalautomation.data.ScriptRepository
 
 class MainViewModel : ViewModel() {
 
-    /* ---------- public actions, called from MainScreen ---------- */
+    /* ---------- overlay ---------- */
 
     fun requestOverlay(ctx: Context) {
         if (!Settings.canDrawOverlays(ctx)) {
@@ -30,16 +29,19 @@ class MainViewModel : ViewModel() {
         }
     }
 
+    /* ---------- save current recording ---------- */
+
     fun saveCurrent(ctx: Context) {
         if (!ScriptRepository.currentExists(ctx)) {
             Toast.makeText(ctx, "No recording yet", Toast.LENGTH_SHORT).show()
             return
         }
-        // quick name: yyyyMMdd_HHmm
         val name = SimpleDateFormat("yyyyMMdd_HHmm", Locale.US).format(Date())
         ScriptRepository.commit(ctx, name)
         Toast.makeText(ctx, "Saved as $name", Toast.LENGTH_SHORT).show()
     }
+
+    /* ---------- accessibility ---------- */
 
     fun requestAccessibility(ctx: Context) {
         ctx.startActivity(
@@ -48,18 +50,14 @@ class MainViewModel : ViewModel() {
         )
     }
 
+    /* ---------- run the in‑progress recording ---------- */
+
     fun runScript(ctx: Context) {
         val svc = AutomationAccessibilityService.instance
         if (svc == null) {
-            // Service isn’t running yet → ask the user to enable it
             requestAccessibility(ctx)
             return
         }
-        svc.playScript(File(ctx.filesDir, "script.json"))
-    }
-
-    // No ServiceConnection, nothing to unbind
-    override fun onCleared() {
-        super.onCleared()
+        svc.playScript(ScriptRepository.currentFile(ctx))
     }
 }

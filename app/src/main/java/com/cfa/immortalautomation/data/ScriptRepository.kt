@@ -2,48 +2,45 @@ package com.cfa.immortalautomation.data
 
 import android.content.Context
 import com.cfa.immortalautomation.model.ClickAction
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.encodeToString
 import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import java.io.File
-
-
 
 object ScriptRepository {
 
-    private const val DIR = "scripts"
-    private const val TMP = "current.json"
+    private const val DIR     = "scripts"
+    private const val CURRENT = "current.json"
 
     private fun dir(ctx: Context): File = File(ctx.filesDir, DIR).apply { mkdirs() }
-    private fun tmp(ctx: Context): File = File(ctx.filesDir, TMP)
+    private fun current(ctx: Context): File = File(ctx.filesDir, CURRENT)
 
-    /* ---------- CRUD ---------- */
+    /* ---------- record ---------- */
 
     fun savePoint(ctx: Context, action: ClickAction) {
-        val file = tmp(ctx)
+        val file  = current(ctx)
         val list: List<ClickAction> =
             if (file.exists()) Json.decodeFromString(file.readText()) else emptyList()
         file.writeText(Json.encodeToString(list + action))
     }
 
-    /** rename current.json -> scripts/<name>.json */
-    fun commit(ctx: Context, name: String) {
-        tmp(ctx).renameTo(File(dir(ctx), "$name.json"))
-    }
+    /* ---------- commit / list / delete ---------- */
+
+    fun commit(ctx: Context, name: String) =
+        current(ctx).renameTo(File(dir(ctx), "$name.json"))
 
     fun all(ctx: Context): List<File> =
         dir(ctx).listFiles { f -> f.extension == "json" }?.toList().orEmpty()
 
-    fun delete(file: File) { file.delete() }
+    fun delete(file: File) {
+        file.delete()
+    }
 
     fun load(file: File): List<ClickAction> =
         Json.decodeFromString(file.readText())
 
-    // add at end of object
-    const val CURRENT = "current.json"
+    /* ---------- helpers ---------- */
 
-    fun currentFile(ctx: Context): File = File(ctx.filesDir, CURRENT)
-
-    fun currentExists(ctx: Context): Boolean = currentFile(ctx).exists()
-
+    fun currentFile(ctx: Context): File = current(ctx)
+    fun currentExists(ctx: Context): Boolean = current(ctx).exists()
 }

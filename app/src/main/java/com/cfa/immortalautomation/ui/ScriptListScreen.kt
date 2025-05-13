@@ -30,38 +30,38 @@ fun ScriptListScreen(onClose: () -> Unit = {}) {
                 title = { Text("My Scripts") },
                 navigationIcon = {
                     IconButton(onClick = onClose) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = "Back"
-                        )
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
                     }
                 }
             )
         }
     ) { padding ->
-        if (ScriptRepository.currentExists(ctx)) {
-            TextButton(onClick = {
-                AutomationAccessibilityService.instance?.playScript(
-                    ScriptRepository.currentFile(ctx)
-                )
-            }) { Text("▶ Run in‑progress recording") }
-            Spacer(Modifier.height(8.dp))
-        }
-        LazyColumn(
-            contentPadding = padding,
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.padding(16.dp)
-        ) {
-            items(items = scripts, key = File::getName) { file ->
-                ScriptRow(
-                    file = file,
-                    onRun = {
-                        AutomationAccessibilityService.instance
-                            ?.playScript(file)
-                            ?: onClose().also { /* prompt user to enable service */ }
-                    },
-                    onDelete = { ScriptRepository.delete(file); refresh() }
-                )
+        Column(Modifier.padding(padding)) {
+
+            if (ScriptRepository.currentExists(ctx)) {
+                TextButton(
+                    onClick = {
+                        AutomationAccessibilityService.instance?.playScript(
+                            ScriptRepository.currentFile(ctx)
+                        )
+                    }
+                ) { Text("▶ Run in‑progress recording") }
+
+                Spacer(Modifier.height(8.dp))
+            }
+
+            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(scripts, key = File::getName) { file ->
+                    ScriptRow(
+                        file = file,
+                        onRun = {
+                            AutomationAccessibilityService.instance
+                                ?.playScript(file)
+                                ?: onClose()
+                        },
+                        onDelete = { ScriptRepository.delete(file); refresh() }
+                    )
+                }
             }
         }
     }
@@ -80,7 +80,7 @@ private fun ScriptRow(
                 .padding(12.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
-            Text(text = file.nameWithoutExtension)
+            Text(file.nameWithoutExtension)
             Row {
                 TextButton(onClick = onRun) { Text("Run") }
                 IconButton(onClick = onDelete) {

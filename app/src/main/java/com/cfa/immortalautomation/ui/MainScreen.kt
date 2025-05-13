@@ -11,8 +11,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 
 /**
- * Home screen with three main actions + a navigation
- * toggle to the script list.
+ * Home screen with record / run / save / list actions.
  */
 @Composable
 fun MainScreen(vm: MainViewModel = viewModel()) {
@@ -21,7 +20,7 @@ fun MainScreen(vm: MainViewModel = viewModel()) {
 
     if (showList) {
         ScriptListScreen { showList = false }
-        return   // early‑return so we don’t also draw the buttons
+        return
     }
 
     Column(
@@ -39,11 +38,11 @@ fun MainScreen(vm: MainViewModel = viewModel()) {
         Button(onClick = { vm.runScript(ctx) }) {
             Text("Run recorded script")
         }
-        Button(onClick = { showList = true }) {
-            Text("View scripts")
-        }
         Button(onClick = { vm.saveCurrent(ctx) }) {
             Text("Save current recording")
+        }
+        Button(onClick = { showList = true }) {
+            Text("View scripts")
         }
     }
 }

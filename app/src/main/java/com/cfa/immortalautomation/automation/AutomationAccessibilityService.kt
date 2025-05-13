@@ -6,12 +6,13 @@ import android.graphics.Path
 import android.view.accessibility.AccessibilityEvent
 import com.cfa.immortalautomation.model.ClickAction
 import kotlinx.coroutines.*
+import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 import java.io.File
 
 class AutomationAccessibilityService : AccessibilityService() {
 
-    /* ---------- static access to the live service ---------- */
+    /* -------- static access to the running instance -------- */
     companion object {
         @Volatile
         var instance: AutomationAccessibilityService? = null
@@ -23,13 +24,13 @@ class AutomationAccessibilityService : AccessibilityService() {
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        instance = this          // <── publish
+        instance = this
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
     override fun onInterrupt() = Unit
 
-    /** Called from your app to play script.json */
+    /** Play a script file */
     fun playScript(file: File) = scope.launch {
         if (!file.exists()) return@launch
         val actions: List<ClickAction> = Json.decodeFromString(file.readText())
@@ -40,7 +41,7 @@ class AutomationAccessibilityService : AccessibilityService() {
     }
 
     private fun gestureTap(x: Float, y: Float) {
-        val path = Path().apply { moveTo(x, y) }
+        val path  = Path().apply { moveTo(x, y) }
         val stroke = GestureDescription.StrokeDescription(path, 0, 50)
         dispatchGesture(
             GestureDescription.Builder().addStroke(stroke).build(),
@@ -50,9 +51,8 @@ class AutomationAccessibilityService : AccessibilityService() {
     }
 
     override fun onDestroy() {
-        instance = null          // <── clear
+        instance = null
         job.cancel()
         super.onDestroy()
     }
 }
-

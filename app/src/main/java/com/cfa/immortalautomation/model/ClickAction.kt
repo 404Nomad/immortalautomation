@@ -6,5 +6,5 @@ import kotlinx.serialization.Serializable
 data class ClickAction(
     val x: Float,
     val y: Float,
-    val delayAfter: Long = 300L   // milliseconds to wait before next click
+    val delayAfter: Long = 300L      // ms between taps
 )
