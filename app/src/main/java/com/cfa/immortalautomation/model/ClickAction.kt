@@ -6,5 +6,5 @@ import kotlinx.serialization.Serializable
 data class ClickAction(
     val x: Float,
     val y: Float,
-    val delayAfter: Long = 300L      // ms between taps
+    val delayAfter: Long = 0 // Ajout de la propriété delayAfter avec une valeur par défaut
 )
