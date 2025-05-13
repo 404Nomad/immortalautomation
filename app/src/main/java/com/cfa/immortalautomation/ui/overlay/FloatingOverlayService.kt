@@ -1,8 +1,6 @@
 package com.cfa.immortalautomation.ui.overlay
 
-import android.app.NotificationChannel
-import android.app.NotificationManager
-import android.app.Service
+import android.app.*
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.PixelFormat
@@ -10,10 +8,12 @@ import android.os.*
 import android.view.*
 import android.widget.ImageView
 import android.widget.Toast
+//import androidx.appcompat.app.AlertDialog
 import androidx.core.app.NotificationCompat
 import com.cfa.immortalautomation.automation.AutomationAccessibilityService
 import com.cfa.immortalautomation.data.ScriptRepository
 import com.cfa.immortalautomation.model.ClickAction
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -73,6 +73,17 @@ class FloatingOverlayService : Service() {
         wm.addView(overlay, lp)
     }
 
+    private fun setOverlayTouchable(enabled: Boolean) {
+        val lp = overlay.layoutParams as WindowManager.LayoutParams
+        val touchableFlag = WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
+        val newFlags = if (enabled) lp.flags and touchableFlag.inv()
+        else lp.flags or  touchableFlag
+        if (newFlags != lp.flags) {
+            lp.flags = newFlags
+            wm.updateViewLayout(overlay, lp)
+        }
+    }
+
     /* ── main floating bubble ──────────────────────── */
     private fun addMainButton() {
         mainBtn = ImageView(this).apply { setImageResource(android.R.drawable.presence_online) }
@@ -108,9 +119,9 @@ class FloatingOverlayService : Service() {
     /* ── child buttons (play/save/record) ──────────── */
     private fun addChildButtons() {
         val icons = intArrayOf(
-            android.R.drawable.ic_media_play,
-            android.R.drawable.ic_menu_save,
-            android.R.drawable.ic_input_add
+            android.R.drawable.ic_media_play,   // ▶
+            android.R.drawable.ic_menu_save,    // 💾
+            android.R.drawable.ic_input_add     // +
         )
 
         icons.forEachIndexed { idx, res ->
@@ -134,17 +145,21 @@ class FloatingOverlayService : Service() {
     private fun startRec() {
         isRecording = true
         overlay.visibility = View.VISIBLE
+        setOverlayTouchable(true)          // ← capte les touchs
         toast("Enregistrement… touchez l’écran")
     }
+
 
     private fun recordPoint(x: Float, y: Float) {
         ScriptRepository.savePoint(this, ClickAction(x, y))
         flashDot(x, y)
 
-        overlay.visibility = View.GONE
+        // Laisse passer le tap
+        setOverlayTouchable(false)
         AutomationAccessibilityService.instance?.injectTap(x, y)
-        h.postDelayed({ overlay.visibility = View.VISIBLE }, OVERLAY_HIDE_MS)
+        h.postDelayed({ setOverlayTouchable(true) }, OVERLAY_HIDE_MS)
     }
+
 
     private fun saveRec() {
         if (!ScriptRepository.currentExists(this)) { toast("Rien à sauvegarder"); return }
@@ -155,10 +170,39 @@ class FloatingOverlayService : Service() {
         toast("Sauvegardé sous $name")
     }
 
+    /* ── NEW: choose & run a script ───────────────── */
     private fun playRec() {
-        AutomationAccessibilityService.instance
-            ?.playScript(ScriptRepository.currentFile(this))
-            ?: toast("Activez le service d’accessibilité")
+        val scripts = ScriptRepository.all(this)
+        if (scripts.isEmpty()) {
+            toast("Aucun script enregistré")
+            return
+        }
+
+        // Construire la liste des noms (+ option « Enregistrement en cours » si présent)
+        val currentExists = ScriptRepository.currentExists(this)
+        val files = if (currentExists) listOf(ScriptRepository.currentFile(this)) + scripts else scripts
+        val labels = files.mapIndexed { i, f ->
+            if (currentExists && i == 0) "Enregistrement en cours" else f.nameWithoutExtension
+        }.toTypedArray()
+
+        val dlg = AlertDialog.Builder(this)
+            .setTitle("Choisir un script")
+            .setItems(labels) { _, which ->
+                AutomationAccessibilityService.instance
+                    ?.playScript(files[which])
+                    ?: toast("Activez le service d’accessibilité")
+            }
+            .setNegativeButton("Annuler", null)
+            .create()
+
+        // Autoriser l’affichage hors de l’app
+        dlg.window?.setType(
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            else
+                WindowManager.LayoutParams.TYPE_PHONE
+        )
+        dlg.show()
     }
 
     /* ── menu helpers ─────────────────────────────── */
@@ -187,7 +231,7 @@ class FloatingOverlayService : Service() {
 
     /* ── visual helpers ───────────────────────────── */
     private fun flashDot(x: Float, y: Float) {
-        val d  = (24 * resources.displayMetrics.density).toInt()
+        val d  = (12 * resources.displayMetrics.density).toInt()
         val v  = View(this).apply { setBackgroundResource(android.R.color.holo_red_light) }
         val lp = baseLp().apply {
             width = d; height = d; gravity = Gravity.TOP or Gravity.START
@@ -217,11 +261,7 @@ class FloatingOverlayService : Service() {
         val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         if (nm.getNotificationChannel(channelId) == null) {
             nm.createNotificationChannel(
-                NotificationChannel(
-                    channelId,
-                    "Overlay",
-                    NotificationManager.IMPORTANCE_MIN
-                )
+                NotificationChannel(channelId, "Overlay", NotificationManager.IMPORTANCE_MIN)
             )
         }
 
@@ -232,7 +272,6 @@ class FloatingOverlayService : Service() {
             .build()
 
         if (Build.VERSION.SDK_INT >= 34) {
-            // passe explicitement le type demandé par le Manifest
             startForeground(
                 1,
                 notification,
