@@ -10,9 +10,8 @@ import android.view.*
 import android.widget.ImageView
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
+import com.cfa.immortalautomation.data.ScriptRepository
 import com.cfa.immortalautomation.model.ClickAction
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import java.io.File
 
 class FloatingOverlayService : Service() {
@@ -20,7 +19,6 @@ class FloatingOverlayService : Service() {
     private lateinit var wm: WindowManager
     private lateinit var params: WindowManager.LayoutParams
     private lateinit var overlay: ImageView
-    private val scriptFile by lazy { File(filesDir, "script.json") }
 
     override fun onCreate() {
         super.onCreate()
@@ -32,7 +30,7 @@ class FloatingOverlayService : Service() {
         params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,   // single, non‑deprecated type
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
             PixelFormat.TRANSLUCENT
         )
@@ -40,7 +38,11 @@ class FloatingOverlayService : Service() {
         overlay.setOnTouchListener { _, e ->
             if (e.action == MotionEvent.ACTION_DOWN) {
                 savePoint(e.rawX, e.rawY)
-                Toast.makeText(this, "Captured (${e.rawX.toInt()},${e.rawY.toInt()})", Toast.LENGTH_SHORT).show()
+                Toast.makeText(
+                    this,
+                    "Captured (${e.rawX.toInt()}, ${e.rawY.toInt()})",
+                    Toast.LENGTH_SHORT
+                ).show()
             }
             false
         }
@@ -49,9 +51,8 @@ class FloatingOverlayService : Service() {
     }
 
     private fun savePoint(x: Float, y: Float) {
-        val points: List<ClickAction> =
-            if (scriptFile.exists()) Json.decodeFromString(scriptFile.readText()) else emptyList()
-        scriptFile.writeText(Json.encodeToString(points + ClickAction(x, y)))
+        // delegate persistence to the repository
+        ScriptRepository.savePoint(this, ClickAction(x, y))
     }
 
     override fun onDestroy() {
@@ -61,9 +62,9 @@ class FloatingOverlayService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
-    /* ---------- fg‑service boilerplate ---------- */
+    /* ---------- foreground‑service boilerplate ---------- */
     private fun startForegroundNotification() {
-        if (Build.VERSION.SDK_INT < 34) return       // not mandatory before 14
+        if (Build.VERSION.SDK_INT < 34) return          // not mandatory before Android 14
         val channelId = "overlay"
         val nm = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         nm.createNotificationChannel(
